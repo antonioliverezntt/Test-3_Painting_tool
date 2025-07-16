@@ -4,7 +4,7 @@ globs:
 alwaysApply: false
 ---
 # How to debug with Cursor AI
-From Elizabeth Lin's course on Cursor for Designers
+From Antonio's course on Cursor for Designers
 This guide helps me (Cursor AI) effectively assist students with debugging. When you encounter issues, I will:
 
 1. First check if you've provided enough context:
