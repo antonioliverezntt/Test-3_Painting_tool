@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import styles from './prototypes/digital-painting-tool/styles.module.css';
-import ColorPicker from './prototypes/digital-painting-tool/ColorPicker';
+import styles from './styles.module.css';
+import ColorPicker from './ColorPicker';
 
 interface BrushSettings {
   size: number;
@@ -18,7 +18,7 @@ interface Point {
   y: number;
 }
 
-export default function Home() {
+export default function DigitalPaintingTool() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isPaintBucketMode, setIsPaintBucketMode] = useState(false);
@@ -190,14 +190,14 @@ export default function Home() {
 
       visited.add(key);
 
-      // Set pixel color
+      // Fill the pixel
       const index = (y * imageData.width + x) * 4;
       imageData.data[index] = fillColorData.r;
       imageData.data[index + 1] = fillColorData.g;
       imageData.data[index + 2] = fillColorData.b;
       imageData.data[index + 3] = fillColorData.a;
 
-      // Add adjacent pixels to stack
+      // Add neighboring pixels to stack
       stack.push({ x: x + 1, y });
       stack.push({ x: x - 1, y });
       stack.push({ x, y: y + 1 });
@@ -268,36 +268,53 @@ export default function Home() {
       ctx.strokeStyle = brushSettings.color;
       ctx.lineWidth = brushSettings.size;
       
-      // Apply brush shape and edge style
-      if (brushSettings.shape === 'round') {
-        ctx.lineCap = brushSettings.edgeStyle === 'sharp' ? 'butt' : 'round';
-      } else if (brushSettings.shape === 'square') {
-        ctx.lineCap = 'square';
-      } else if (brushSettings.shape === 'soft') {
-        ctx.lineCap = 'round';
-        ctx.shadowColor = brushSettings.color;
-        ctx.shadowBlur = brushSettings.size * 0.3;
+      // Configure brush shape and edge style
+      switch (brushSettings.shape) {
+        case 'round':
+          ctx.lineCap = 'round';
+          break;
+        case 'square':
+          ctx.lineCap = 'square';
+          break;
+        case 'soft':
+          ctx.lineCap = 'round';
+          ctx.shadowColor = brushSettings.color;
+          ctx.shadowBlur = brushSettings.size / 4;
+          break;
       }
 
+      // Apply edge style effects
+      switch (brushSettings.edgeStyle) {
+        case 'sharp':
+          // No additional effects for sharp edges
+          break;
+        case 'soft':
+          if (brushSettings.shape !== 'soft') {
+            ctx.shadowColor = brushSettings.color;
+            ctx.shadowBlur = brushSettings.size / 8;
+          }
+          break;
+        case 'blurred':
+          ctx.shadowColor = brushSettings.color;
+          ctx.shadowBlur = brushSettings.size / 3;
+          ctx.filter = `blur(${brushSettings.size / 20}px)`;
+          break;
+      }
+
+      // Apply smoothing if enabled
       if (brushSettings.smoothing) {
-        // Smooth line drawing
-        const midX = (lastPosition.x + currentPosition.x) / 2;
-        const midY = (lastPosition.y + currentPosition.y) / 2;
-        
-        ctx.beginPath();
-        ctx.moveTo(lastPosition.x, lastPosition.y);
-        ctx.quadraticCurveTo(lastPosition.x, lastPosition.y, midX, midY);
-        ctx.stroke();
-      } else {
-        // Direct line drawing
-        ctx.beginPath();
-        ctx.moveTo(lastPosition.x, lastPosition.y);
-        ctx.lineTo(currentPosition.x, currentPosition.y);
-        ctx.stroke();
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
       }
 
-      // Reset shadow
+      ctx.beginPath();
+      ctx.moveTo(lastPosition.x, lastPosition.y);
+      ctx.lineTo(currentPosition.x, currentPosition.y);
+      ctx.stroke();
+      
+      // Reset effects
       ctx.shadowBlur = 0;
+      ctx.filter = 'none';
       ctx.globalAlpha = 1;
     }
     
@@ -384,7 +401,7 @@ export default function Home() {
               <h3 className={styles.sectionTitle}>Brush Settings</h3>
               <div className={styles.sectionContent}>
                 <div className={styles.controlGroup}>
-                  <label className={styles.label}>Size</label>
+                  <label className={styles.label}>Brush Size</label>
                   <div className={styles.sliderContainer}>
                     <input
                       type="range"
@@ -462,8 +479,12 @@ export default function Home() {
                         onChange={(e) => setBrushSettings(prev => ({ ...prev, smoothing: e.target.checked }))}
                         className={styles.toggleInput}
                       />
-                      <span className={styles.toggleSlider}></span>
-                      <span className={styles.toggleText}>{brushSettings.smoothing ? 'ON' : 'OFF'}</span>
+                      <div className={styles.toggleSlider}>
+                        <span className={styles.toggleIndicator}></span>
+                      </div>
+                      <span className={styles.toggleLabel}>
+                        {brushSettings.smoothing ? 'On' : 'Off'}
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -473,7 +494,7 @@ export default function Home() {
                   <div className={styles.edgeButtons}>
                     {([
                       { value: 'sharp', icon: '⚡', label: 'Sharp' },
-                      { value: 'soft', icon: '🌟', label: 'Soft' },
+                      { value: 'soft', icon: '✨', label: 'Soft' },
                       { value: 'blurred', icon: '☁️', label: 'Blurred' }
                     ] as const).map((edge) => (
                       <button
@@ -492,7 +513,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Canvas Actions Section */}
+            {/* Canvas Section */}
             <div className={styles.section}>
               <h3 className={styles.sectionTitle}>Canvas</h3>
               <div className={styles.sectionContent}>
@@ -528,4 +549,4 @@ export default function Home() {
       </main>
     </div>
   );
-}
+} 

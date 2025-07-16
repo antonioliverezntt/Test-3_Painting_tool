@@ -1,0 +1,351 @@
+/* Color Picker Container */
+.colorPickerContainer {
+  position: relative;
+  display: inline-block;
+}
+
+/* Color Trigger Button */
+.colorTrigger {
+  width: 50px;
+  height: 50px;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(219, 39, 119, 0.3); /* ring-1 ring-pink-300 equivalent */
+  background: white;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+  position: relative;
+  overflow: hidden;
+}
+
+.colorTrigger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.colorTriggerInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
+  border: 2px solid white;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile Backdrop */
+.backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+/* Picker Wrapper */
+.pickerWrapper {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Desktop Picker Positioning */
+@media (min-width: 769px) {
+  .backdrop {
+    display: none;
+  }
+  
+  .pickerWrapper {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    transform: none;
+    margin-top: 0.5rem;
+    z-index: 1001;
+    animation: dropdownSlideIn 0.2s ease-out;
+  }
+  
+  @keyframes dropdownSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Picker Container */
+.pickerContainer {
+  background: white;
+  border-radius: 0.75rem; /* rounded-xl */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* shadow-2xl */
+  border: 1px solid rgba(219, 39, 119, 0.3); /* ring-1 ring-pink-300 */
+  padding: 1rem; /* p-4 */
+  min-width: 280px;
+  max-width: 90vw;
+}
+
+/* Picker Header */
+.pickerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+}
+
+.pickerTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.closeButton {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: rgba(239, 68, 68, 0.2);
+  transform: scale(1.1);
+}
+
+/* Hide close button on desktop */
+@media (min-width: 769px) {
+  .closeButton {
+    display: none;
+  }
+}
+
+/* Picker Content */
+.pickerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* React Colorful Styling */
+.colorPickerWrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.reactColorful {
+  width: 220px !important;
+  height: 200px !important;
+}
+
+.reactColorful .react-colorful__saturation {
+  border-radius: 0.375rem !important; /* rounded-md */
+  border: none !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.reactColorful .react-colorful__hue {
+  height: 12px !important; /* h-3 */
+  border-radius: 6px !important; /* rounded ends */
+  border: none !important;
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1) !important;
+  margin-top: 12px !important;
+}
+
+.reactColorful .react-colorful__hue-pointer,
+.reactColorful .react-colorful__saturation-pointer {
+  border: 2px solid white !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Current Color Section */
+.currentColorSection {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(249, 250, 251, 0.5);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(229, 231, 235, 0.5);
+}
+
+.currentColorSwatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 1), 0 0 0 4px rgba(139, 92, 246, 0.2); /* ring-2 ring-offset-2 ring-violet-500 */
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.currentColorInner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.colorInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.colorValue {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 600;
+  color: #111827;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.2s ease;
+  position: relative;
+}
+
+.colorValue:hover {
+  color: #7c3aed;
+}
+
+.copyFeedback {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: #059669;
+  font-weight: 500;
+  animation: fadeInOut 2s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+}
+
+.rgbValue {
+  font-size: 0.875rem; /* text-sm */
+  color: #6b7280; /* text-gray-500 */
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* Presets Section */
+.presetsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.presetsLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.presetsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.presetSwatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.presetSwatch:hover {
+  transform: scale(1.05); /* scale-105 */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-sm on hover */
+}
+
+.presetSwatch:active {
+  transform: scale(0.98);
+}
+
+.presetActive {
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 1), 0 0 0 4px rgba(139, 92, 246, 0.2) !important; /* ring-2 ring-violet-500 */
+}
+
+.presetActive:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 1), 0 0 0 4px rgba(139, 92, 246, 0.3) !important;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .pickerContainer {
+    min-width: 320px;
+    max-width: 400px;
+    padding: 1.5rem;
+  }
+  
+  .reactColorful {
+    width: 100% !important;
+    max-width: 280px !important;
+  }
+  
+  .presetsGrid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .presetSwatch {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* Small Mobile */
+@media (max-width: 480px) {
+  .pickerContainer {
+    min-width: 300px;
+    max-width: 350px;
+    padding: 1rem;
+  }
+  
+  .reactColorful {
+    width: 100% !important;
+    max-width: 250px !important;
+    height: 180px !important;
+  }
+} 
