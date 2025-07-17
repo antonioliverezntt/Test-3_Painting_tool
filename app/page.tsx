@@ -18,11 +18,39 @@ interface Point {
   y: number;
 }
 
+interface Layer {
+  id: string;
+  name: string;
+  visible: boolean;
+  opacity: number;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+}
+
 export default function Home() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Initialize layers with 2 default layers
+  const createLayer = (id: string, name: string): Layer => ({
+    id,
+    name,
+    visible: true,
+    opacity: 100,
+    canvasRef: React.createRef<HTMLCanvasElement>()
+  });
+
+  const [layers, setLayers] = useState<Layer[]>(() => [
+    createLayer('layer-1', 'Layer 1'),
+    createLayer('layer-2', 'Layer 2')
+  ]);
+  
+  const [activeLayerId, setActiveLayerId] = useState<string>('layer-1');
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
+  const [editingLayerName, setEditingLayerName] = useState<string>('');
   const [isDrawing, setIsDrawing] = useState(false);
   const [isPaintBucketMode, setIsPaintBucketMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Drag and drop state
+  const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
+  const [dragOverLayerId, setDragOverLayerId] = useState<string | null>(null);
   const [brushSettings, setBrushSettings] = useState<BrushSettings>({
     size: 10,
     color: '#000000',
@@ -34,83 +62,259 @@ export default function Home() {
 
   const [lastPosition, setLastPosition] = useState<{ x: number; y: number } | null>(null);
 
-  // Initialize canvas with responsive sizing and ResizeObserver
+  // Get the active layer
+  const activeLayer = layers.find(layer => layer.id === activeLayerId);
+  const activeCanvasRef = activeLayer?.canvasRef;
+
+  // Layer management functions
+  const createNewLayer = useCallback(() => {
+    const nextLayerNumber = layers.length + 1;
+    const newLayerId = `layer-${Date.now()}`;
+    const newLayer = createLayer(newLayerId, `Layer ${nextLayerNumber}`);
+    
+    setLayers(prev => [...prev, newLayer]);
+    setActiveLayerId(newLayerId);
+  }, [layers.length]);
+
+  const deleteLayer = useCallback((layerId: string) => {
+    if (layers.length <= 1) return; // Don't delete if it's the last layer
+    
+    setLayers(prev => prev.filter(layer => layer.id !== layerId));
+    
+    // If deleting the active layer, switch to another layer
+    if (activeLayerId === layerId) {
+      const remainingLayers = layers.filter(layer => layer.id !== layerId);
+      if (remainingLayers.length > 0) {
+        setActiveLayerId(remainingLayers[0].id);
+      }
+    }
+  }, [layers, activeLayerId]);
+
+  const startEditingLayerName = useCallback((layerId: string, currentName: string) => {
+    setEditingLayerId(layerId);
+    setEditingLayerName(currentName);
+  }, []);
+
+  const saveLayerName = useCallback(() => {
+    if (editingLayerId && editingLayerName.trim()) {
+      setLayers(prev => prev.map(layer => 
+        layer.id === editingLayerId 
+          ? { ...layer, name: editingLayerName.trim() }
+          : layer
+      ));
+    }
+    setEditingLayerId(null);
+    setEditingLayerName('');
+  }, [editingLayerId, editingLayerName]);
+
+  const cancelEditingLayerName = useCallback(() => {
+    setEditingLayerId(null);
+    setEditingLayerName('');
+  }, []);
+
+  // Drag and drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent, layerId: string) => {
+    setDraggedLayerId(layerId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', layerId);
+    
+    // Create a custom drag image with layer info
+    const dragElement = e.currentTarget as HTMLElement;
+    const rect = dragElement.getBoundingClientRect();
+    e.dataTransfer.setDragImage(dragElement, rect.width / 2, rect.height / 2);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, layerId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverLayerId(layerId);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverLayerId(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetLayerId: string) => {
+    e.preventDefault();
+    
+    if (!draggedLayerId || draggedLayerId === targetLayerId) {
+      setDraggedLayerId(null);
+      setDragOverLayerId(null);
+      return;
+    }
+
+    // Reorder layers
+    setLayers(prev => {
+      const draggedIndex = prev.findIndex(layer => layer.id === draggedLayerId);
+      const targetIndex = prev.findIndex(layer => layer.id === targetLayerId);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return prev;
+
+      const newLayers = [...prev];
+      const [draggedLayer] = newLayers.splice(draggedIndex, 1);
+      newLayers.splice(targetIndex, 0, draggedLayer);
+      
+      return newLayers;
+    });
+
+    setDraggedLayerId(null);
+    setDragOverLayerId(null);
+  }, [draggedLayerId]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedLayerId(null);
+    setDragOverLayerId(null);
+  }, []);
+
+  // Get canvas thumbnail for layer preview
+  const getLayerThumbnail = useCallback((layer: Layer) => {
+    const canvas = layer.canvasRef.current;
+    if (!canvas) return null;
+    
+    try {
+      // Create a small thumbnail canvas
+      const thumbnailCanvas = document.createElement('canvas');
+      const thumbnailCtx = thumbnailCanvas.getContext('2d');
+      if (!thumbnailCtx) return null;
+      
+      // Set thumbnail size (40px square for w-10 h-10)
+      const thumbnailSize = 40;
+      thumbnailCanvas.width = thumbnailSize;
+      thumbnailCanvas.height = thumbnailSize;
+      
+      // Fill with white background
+      thumbnailCtx.fillStyle = '#FDFCFB';
+      thumbnailCtx.fillRect(0, 0, thumbnailSize, thumbnailSize);
+      
+      // Draw the layer canvas scaled down
+      thumbnailCtx.drawImage(canvas, 0, 0, thumbnailSize, thumbnailSize);
+      return thumbnailCanvas.toDataURL();
+    } catch (error) {
+      return null;
+    }
+  }, []);
+
+  // Trigger thumbnail regeneration when layers change
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const generateThumbnails = () => {
+      const newThumbnails: Record<string, string> = {};
+      layers.forEach(layer => {
+        const thumbnail = getLayerThumbnail(layer);
+        if (thumbnail) {
+          newThumbnails[layer.id] = thumbnail;
+        }
+      });
+      setThumbnails(newThumbnails);
+    };
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    // Generate thumbnails after a short delay to ensure canvas content is rendered
+    const timeoutId = setTimeout(generateThumbnails, 100);
+    return () => clearTimeout(timeoutId);
+  }, [layers, getLayerThumbnail]);
 
-    // Function to set canvas size based on displayed dimensions
-    const resizeCanvas = () => {
-      const rect = canvas.getBoundingClientRect();
+  // Update thumbnails when drawing stops or paint bucket operation completes
+  useEffect(() => {
+    if ((!isDrawing || !isProcessing) && layers.length > 0) {
+      const timeoutId = setTimeout(() => {
+        const newThumbnails: Record<string, string> = {};
+        layers.forEach(layer => {
+          const thumbnail = getLayerThumbnail(layer);
+          if (thumbnail) {
+            newThumbnails[layer.id] = thumbnail;
+          }
+        });
+        setThumbnails(newThumbnails);
+      }, 200);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isDrawing, isProcessing, layers, getLayerThumbnail]);
+
+  // Initialize all layer canvases with responsive sizing and ResizeObserver
+  useEffect(() => {
+    if (layers.length === 0) return;
+
+    // Function to set canvas size based on displayed dimensions for all layers
+    const resizeAllCanvases = () => {
+      const firstCanvas = layers[0]?.canvasRef.current;
+      if (!firstCanvas) return;
+
+      const rect = firstCanvas.getBoundingClientRect();
       const pixelRatio = window.devicePixelRatio || 1;
       
-      // Only resize if dimensions have actually changed
       const newWidth = Math.floor(rect.width * pixelRatio);
       const newHeight = Math.floor(rect.height * pixelRatio);
-      
-      if (canvas.width !== newWidth || canvas.height !== newHeight) {
-        // Save current drawing before resize
-        const imageData = canvas.width > 0 && canvas.height > 0 ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
-        
-        // Set the actual size in memory (scaled for retina displays)
-        canvas.width = newWidth;
-        canvas.height = newHeight;
-        
-        // Scale the drawing context so everything draws at the correct size
-        ctx.scale(pixelRatio, pixelRatio);
-        
-        // Set the display size (CSS pixels)
-        canvas.style.width = rect.width + 'px';
-        canvas.style.height = rect.height + 'px';
 
-        // Set white background
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, rect.width, rect.height);
+      layers.forEach(layer => {
+        const canvas = layer.canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!canvas || !ctx) return;
 
-        // Restore drawing if it existed
-        if (imageData) {
-          // Create a temporary canvas to restore the drawing
-          const tempCanvas = document.createElement('canvas');
-          const tempCtx = tempCanvas.getContext('2d');
-          if (tempCtx) {
-            tempCanvas.width = imageData.width;
-            tempCanvas.height = imageData.height;
-            tempCtx.putImageData(imageData, 0, 0);
-            
-            // Draw the previous content scaled to new size
-            ctx.drawImage(tempCanvas, 0, 0, rect.width, rect.height);
+        // Only resize if dimensions have actually changed
+        if (canvas.width !== newWidth || canvas.height !== newHeight) {
+          // Save current content
+          const imageData = canvas.width > 0 && canvas.height > 0 ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
+          
+          // Resize canvas
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+          
+          // Scale the drawing context so everything draws at the correct size
+          ctx.scale(pixelRatio, pixelRatio);
+          
+          // Set the display size (CSS pixels)
+          canvas.style.width = rect.width + 'px';
+          canvas.style.height = rect.height + 'px';
+
+          // For the first layer (background), set white background
+          if (layer.id === layers[0]?.id) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, rect.width, rect.height);
           }
-        }
 
-        // Configure drawing settings
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-      }
+          // Restore content if it existed
+          if (imageData) {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            if (tempCtx) {
+              tempCanvas.width = imageData.width;
+              tempCanvas.height = imageData.height;
+              tempCtx.putImageData(imageData, 0, 0);
+              
+              // Draw the previous content scaled to new size
+              ctx.drawImage(tempCanvas, 0, 0, rect.width, rect.height);
+            }
+          }
+
+          // Configure drawing settings
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+        }
+      });
     };
 
     // Initial resize
-    resizeCanvas();
+    resizeAllCanvases();
 
     // Use ResizeObserver for more efficient resize detection
     let resizeObserver: ResizeObserver | null = null;
+    const firstCanvas = layers[0]?.canvasRef.current;
     
-    if (window.ResizeObserver) {
+    if (window.ResizeObserver && firstCanvas) {
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          if (entry.target === canvas) {
-            resizeCanvas();
+          if (entry.target === firstCanvas) {
+            resizeAllCanvases();
           }
         }
       });
-      resizeObserver.observe(canvas);
+      resizeObserver.observe(firstCanvas);
     }
 
     // Fallback to window resize for older browsers
     const handleResize = () => {
-      setTimeout(resizeCanvas, 100);
+      setTimeout(resizeAllCanvases, 100);
     };
 
     window.addEventListener('resize', handleResize);
@@ -121,11 +325,11 @@ export default function Home() {
       }
       window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [layers]);
 
   // Get mouse position relative to canvas (in CSS pixels)
   const getMousePosition = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
+    const canvas = activeCanvasRef?.current;
     if (!canvas) return { x: 0, y: 0 };
 
     const rect = canvas.getBoundingClientRect();
@@ -133,11 +337,11 @@ export default function Home() {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
     };
-  }, []);
+  }, [activeCanvasRef]);
 
   // Flood fill algorithm
   const floodFill = useCallback((startX: number, startY: number, targetColor: string, fillColor: string) => {
-    const canvas = canvasRef.current;
+    const canvas = activeCanvasRef?.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
@@ -205,7 +409,7 @@ export default function Home() {
     }
 
     ctx.putImageData(imageData, 0, 0);
-  }, [brushSettings.opacity]);
+  }, [brushSettings.opacity, activeCanvasRef]);
 
   // Handle canvas click
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -213,7 +417,7 @@ export default function Home() {
 
     setIsProcessing(true);
     const position = getMousePosition(e);
-    const canvas = canvasRef.current;
+    const canvas = activeCanvasRef?.current;
     const ctx = canvas?.getContext('2d');
     
     if (!canvas || !ctx) {
@@ -235,7 +439,7 @@ export default function Home() {
       floodFill(scaledX, scaledY, clickedColor, brushSettings.color);
       setIsProcessing(false);
     }, 100);
-  }, [isPaintBucketMode, getMousePosition, floodFill, brushSettings.color]);
+  }, [isPaintBucketMode, getMousePosition, floodFill, brushSettings.color, activeCanvasRef]);
 
   // Start drawing
   const startDrawing = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -252,7 +456,7 @@ export default function Home() {
   const draw = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing || isPaintBucketMode) return;
 
-    const canvas = canvasRef.current;
+    const canvas = activeCanvasRef?.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
@@ -302,7 +506,7 @@ export default function Home() {
     }
     
     setLastPosition(currentPosition);
-  }, [isDrawing, lastPosition, brushSettings, getMousePosition]);
+  }, [isDrawing, lastPosition, brushSettings, getMousePosition, activeCanvasRef]);
 
   // Stop drawing
   const stopDrawing = useCallback(() => {
@@ -312,25 +516,25 @@ export default function Home() {
 
   // Clear canvas
   const clearCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
+    const canvas = activeCanvasRef?.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
     const rect = canvas.getBoundingClientRect();
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, rect.width, rect.height);
-  }, []);
+  }, [activeCanvasRef]);
 
   // Save canvas as image
   const saveCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
+    const canvas = activeCanvasRef?.current;
     if (!canvas) return;
 
     const link = document.createElement('a');
     link.download = 'my-painting.png';
     link.href = canvas.toDataURL();
     link.click();
-  }, []);
+  }, [activeCanvasRef]);
 
   return (
     <div className={styles.container}>
@@ -492,14 +696,144 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Layers Section */}
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Layers</h3>
+                <button
+                  onClick={createNewLayer}
+                  className={styles.addLayerButton}
+                  title="Add new layer"
+                >
+                  <span className={styles.addLayerIcon}>+</span>
+                </button>
+              </div>
+              <div className={styles.sectionContent}>
+                <div className={styles.layersList}>
+                  {[...layers].reverse().map((layer, index) => (
+                    <div
+                      key={layer.id}
+                      className={`${styles.layerItem} ${layer.id === activeLayerId ? styles.layerItemActive : ''} ${
+                        draggedLayerId === layer.id ? styles.layerDragging : ''
+                      } ${dragOverLayerId === layer.id ? styles.layerDragOver : ''}`}
+                      onClick={() => setActiveLayerId(layer.id)}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, layer.id)}
+                      onDragOver={(e) => handleDragOver(e, layer.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, layer.id)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <div className={styles.layerDragHandle} title="Drag to reorder layers">
+                        <span className={styles.dragHandleIcon}>☰</span>
+                      </div>
+                      
+                      <div className={styles.layerThumbnail}>
+                        {thumbnails[layer.id] ? (
+                          <img 
+                            src={thumbnails[layer.id]} 
+                            alt={`${layer.name} thumbnail`}
+                            className={styles.thumbnailImage}
+                          />
+                        ) : (
+                          <div className={styles.thumbnailPlaceholder}>
+                            {layer.name.charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className={styles.layerInfo}>
+                        {editingLayerId === layer.id ? (
+                          <input
+                            type="text"
+                            value={editingLayerName}
+                            onChange={(e) => setEditingLayerName(e.target.value)}
+                            onBlur={saveLayerName}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveLayerName();
+                              if (e.key === 'Escape') cancelEditingLayerName();
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className={styles.layerNameInput}
+                            autoFocus
+                          />
+                        ) : (
+                          <span 
+                            className={styles.layerName}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEditingLayerName(layer.id, layer.name);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="Click to edit layer name"
+                          >
+                            {layer.name}
+                          </span>
+                        )}
+                        
+                        <div className={styles.layerOpacity}>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={layer.opacity}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const newOpacity = parseInt(e.target.value);
+                              setLayers(prev => prev.map(l => 
+                                l.id === layer.id ? { ...l, opacity: newOpacity } : l
+                              ));
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className={styles.opacitySlider}
+                            title={`Opacity: ${layer.opacity}%`}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className={styles.layerControls}>
+                        <button
+                          className={`${styles.layerVisibilityButton} ${layer.visible ? styles.layerVisible : styles.layerHidden}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLayers(prev => prev.map(l => 
+                              l.id === layer.id ? { ...l, visible: !l.visible } : l
+                            ));
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          title={layer.visible ? 'Hide layer' : 'Show layer'}
+                        >
+                          {layer.visible ? '👁️' : '🙈'}
+                        </button>
+                        
+                        {layers.length > 1 && (
+                          <button
+                            className={styles.layerDeleteButton}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteLayer(layer.id);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            title="Delete layer"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {/* Canvas Actions Section */}
             <div className={styles.section}>
               <h3 className={styles.sectionTitle}>Canvas</h3>
               <div className={styles.sectionContent}>
                 <div className={styles.canvasButtons}>
-                  <button onClick={clearCanvas} className={styles.canvasButton} title="Clear the entire canvas">
+                  <button onClick={clearCanvas} className={styles.canvasButton} title="Clear the active layer">
                     <span className={styles.buttonIcon}>🗑️</span>
-                    Clear Canvas
+                    Clear Layer
                   </button>
                   <button onClick={saveCanvas} className={styles.canvasButtonPrimary} title="Download your painting">
                     <span className={styles.buttonIcon}>💾</span>
@@ -510,19 +844,30 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Canvas */}
+          {/* Canvas Layers */}
           <div className={styles.canvasWrapper}>
-            <canvas
-              ref={canvasRef}
-              className={`${styles.canvas} ${isPaintBucketMode ? styles.canvasBucketMode : ''} ${isProcessing ? styles.canvasProcessing : ''}`}
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              style={{
-                cursor: isPaintBucketMode ? 'url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTkuNSAxMS41TDEyIDkuNUwxNiAxMy41TDE0IDcuNUwxNi41IDVMMjEuNSA5TDE5LjUgMTFMMTUuNSA3TDE0LjUgMTAuNUwxOCAxNEwyMC41IDE2LjVMMTguNSAxOC41TDE2IDE2TDE0LjUgMTcuNUwxMyAxNkwxMS41IDE3LjVMOSAxNkw2LjUgMTMuNUw5IDEwLjVaIiBmaWxsPSIjZWM0ODk5Ii8+CjxyZWN0IHg9IjMiIHk9IjE2IiB3aWR0aD0iMTgiIGhlaWdodD0iNSIgcng9IjIiIGZpbGw9IiNlYzQ4OTkiLz4KPC9zdmc+") 12 12, pointer' : 'crosshair'
-              }}
-            />
+            <div className={styles.layersContainer}>
+              {layers.map((layer, index) => (
+                <canvas
+                  key={layer.id}
+                  ref={layer.canvasRef}
+                  className={`${styles.canvas} ${styles.layerCanvas} ${isPaintBucketMode ? styles.canvasBucketMode : ''} ${isProcessing ? styles.canvasProcessing : ''}`}
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    zIndex: index + 1, // First layer (index 0) has z-index 1, last layer has highest z-index
+                    opacity: layer.visible ? layer.opacity / 100 : 0,
+                    pointerEvents: layer.id === activeLayerId ? 'auto' : 'none',
+                    cursor: isPaintBucketMode ? 'url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTkuNSAxMS41TDEyIDkuNUwxNiAxMy41TDE0IDcuNUwxNi41IDVMMjEuNSA5TDE5LjUgMTFMMTUuNSA3TDE0LjUgMTAuNUwxOCAxNEwyMC41IDE2LjVMMTguNSAxOC41TDE2IDE2TDE0LjUgMTcuNUwxMyAxNkwxMS41IDE3LjVMOSAxNkw2LjUgMTMuNUw5IDEwLjVaIiBmaWxsPSIjZWM0ODk5Ii8+CjxyZWN0IHg9IjMiIHk9IjE2IiB3aWR0aD0iMTgiIGhlaWdodD0iNSIgcng9IjIiIGZpbGw9IiNlYzQ4OTkiLz4KPC9zdmc+") 12 12, pointer' : 'crosshair'
+                  }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </main>
